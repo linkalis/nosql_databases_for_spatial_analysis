@@ -31,7 +31,7 @@ class Extractor:
     every file in the target folder.  Contains methods for checking which files in the log have not yet
     been loaded and getting and reading in the next available file. '''
 
-    def __init__(self, data_path, logs_path):
+    def __init__(self, data_path, logs_path, initialize=True):
         self.data_path = data_path
         self.logs_path = logs_path
 
@@ -40,15 +40,23 @@ class Extractor:
         if not os.path.exists(logs_dir):
             os.makedirs(logs_dir)
 
-        # Create a 'files_to_load.txt' file, then write the name of every file in the directory to this file
-        files_to_load_log  = open(self.logs_path + "/files_to_load.txt", "w")
-        data_files_list = os.listdir(self.data_path)
-        file_type = "*.txt"
-        for file in data_files_list:
-            if fnmatch.fnmatch(file, file_type):
-                files_to_load_log.write(file)
-                files_to_load_log.write("\n")
-        files_to_load_log.close()
+        # If we're in the initialize state, create a 'files_to_load.txt' file,
+        # then write the name of every file in the directory to this file
+        if initialize:
+            files_to_load_log  = open(self.logs_path + "/files_to_load.txt", "w")
+            data_files_list = os.listdir(self.data_path)
+            file_type = "*.txt"
+            for file in data_files_list:
+                if fnmatch.fnmatch(file, file_type):
+                    files_to_load_log.write(file)
+                    files_to_load_log.write("\n")
+            files_to_load_log.close()
+
+            # Also delete any existing logs that may still be lying around
+            if os.path.exists(self.logs_path + "cleaning_log.txt"):
+                os.remove(self.logs_path + "cleaning_log.txt")
+            if os.path.exists(self.logs_path + "loaded_files.txt"):
+                os.remove(self.logs_path + "loaded_files.txt")
 
     def next_file_available(self):
         ''' Checks if there's another file available in the files_to_load.txt log. If there's a
