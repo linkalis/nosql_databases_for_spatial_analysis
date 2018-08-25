@@ -9,6 +9,8 @@ import time
 
 # Libraries for Mongo
 import pymongo
+from bson import Binary, Code
+from bson.json_util import dumps
 
 # Libraries for Neo4j
 from neo4j.v1 import GraphDatabase
@@ -162,7 +164,11 @@ class Cleaner:
             # If record has a 'place' attribute, but it's set to 'None', then go and add dummy values
             if record['place'] is None:
                 set_none_place()
-            pass # if a place is present and its value is not None, then move along without changing/setting its values
+            # If record has a 'place attribute', but its bounding box is invalid, then replace its data with the dummy values
+            elif record['place']['bounding_box'] is None:
+                record['place'] = None
+                set_none_place()
+            pass # if a place is present, its value is not None, and its bounding box is present, then move along without changing/setting its values
         else:
             # If record doesn't have a 'place' attribute, then initialize one before adding dummy values
             record['place'] = None
@@ -300,18 +306,18 @@ class Loader:
         begin = time.time()
 
         try:
-            bulk_load_results = self.db_connection.bulk_load_records(self.data_list)
-        except pymongo.errors.BulkWriteError as bwe:
-            print("Couldn't bulk load records because BulkWriteError: ")
-            print(bwe.details)
+            fail_log = self.db_connection.bulk_load_records(self.data_list)
         except Exception as e:
-            print("Couldn't bulk load records because Exception: ")
+            print("Couldn't bulk load records because: ")
             print(str(e))
+            fail_log = str(e)
+            raise
 
+        print("Loader: Finished loading records.")
         end = time.time()
         load_time = end - begin # compute time elapsed for load
         self.db_connection.close_connection() # close database connection
-        self.log_load(load_time, 'NA', 'NA', bulk_load_results) # write load results to log
+        self.log_load(load_time, 'NA', 'NA', fail_log) # write load results to log
 
     def log_load(self, load_time, success_count, fail_count, fail_log):
         ''' When load is done, record the time it took to run, number of successes, and number of failures.
@@ -370,7 +376,12 @@ class MongoDBLoader:
         self.connection.insert_one(record)
 
     def bulk_load_records(self, record_list):
-        self.connection.insert_many(record_list, ordered = False)
+        try:
+            self.connection.insert_many(record_list, ordered = False)
+        except pymongo.errors.BulkWriteError as bwe:
+            fail_log = dumps(bwe.details)
+            return(fail_log)
+
 
     def close_connection(self):
         self.client.close()
