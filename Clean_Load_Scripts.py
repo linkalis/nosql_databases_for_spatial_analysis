@@ -45,7 +45,7 @@ class Extractor:
         if initialize:
             files_to_load_log  = open(self.logs_path + "/files_to_load.txt", "w")
             data_files_list = os.listdir(self.data_path)
-            file_type = "*.txt"
+            file_type = "*.json"
             for file in data_files_list:
                 if fnmatch.fnmatch(file, file_type):
                     files_to_load_log.write(file)
@@ -106,8 +106,11 @@ class Cleaner:
 
     def clean_data(self):
         ''' Iterates over each data element, progressing through each cleaning step on each element.
+        Because dictionaries are mutable, this function can essentially perform an 'update in place'
+        on the dictionary object representing the record for any values that need to be changed or corrected.
         Logs the ids of data elements that contain nulls and/or errors to arrays as we go. At the end
-        of cleaning, invokes the log_cleaning() method to '''
+        of cleaning, invokes the log_cleaning() method to record a log of which records needed to have
+        their geodata cleaned. '''
 
         step1_log = []
         step2_log = []
@@ -115,6 +118,7 @@ class Cleaner:
         #i = 0
         for record in self.data_list:
             #print(i)
+            self.set_data_types(record)
             self.fix_null_places(record, step1_log)
             self.fix_bounding_box(record, step2_log)
             self.get_centroid(record)
@@ -123,6 +127,10 @@ class Cleaner:
         print("Cleaner: Finished cleaning records.")
         self.log_cleaning(step1_log, step2_log)
         return(self.data_list)
+
+    def set_data_types(self, record):
+        record['id_str'] = str(record['id_str'])
+        record['timestamp_ms'] = int(record['timestamp_ms'])
 
     def fix_null_places(self, record, log_array):
         ''' Since place values are critical to our data model, substitute dummy
@@ -217,7 +225,6 @@ class Cleaner:
 
         record['place']['centroid_geohash'] = pgh.encode(centroid_lat, centroid_long, precision=12)
 
-
     def log_cleaning(self, step1_log, step2_log):
         ''' When cleaning is done, put the cleaning log arrays into a dictionary and write the result
         to the cleaning log file. '''
@@ -270,12 +277,9 @@ class Loader:
 
         print("Loader: Loading records...")
         for record in self.data_list:
-            #print(i)
-            #print("Loading record with id: " + record['id_str'] + "; User id: " + str(record['user']['id']) + "; Place id: " + str(record['place']['id']))
             try:
                 self.db_connection.load_record(record)
                 success_count += 1
-                #print("Loaded!")
             except Exception as e:
                 print("Couldn't load record with id: " + record['id_str'])
                 #print(e)
@@ -295,13 +299,19 @@ class Loader:
     def load_batch_data(self):
         begin = time.time()
 
-        self.db_connection.load_batch(self.data_list)
+        try:
+            bulk_load_results = self.db_connection.bulk_load_records(self.data_list)
+        except pymongo.errors.BulkWriteError as bwe:
+            print("Couldn't bulk load records because BulkWriteError: ")
+            print(bwe.details)
+        except Exception as e:
+            print("Couldn't bulk load records because Exception: ")
+            print(str(e))
 
         end = time.time()
         load_time = end - begin # compute time elapsed for load
         self.db_connection.close_connection() # close database connection
-        self.log_load(load_time, success_count, fail_count, fail_log) # write load results to log
-
+        self.log_load(load_time, 'NA', 'NA', bulk_load_results) # write load results to log
 
     def log_load(self, load_time, success_count, fail_count, fail_log):
         ''' When load is done, record the time it took to run, number of successes, and number of failures.
@@ -345,19 +355,22 @@ class MongoDBLoader:
         self.collection_name = collection_name
 
     def initialize_connection(self):
-        self.client = pymongo.MongoClient('mongodb://' + self.username + ':' + self.pwd + '@' + self.db_host + ':' + self.db_port)
+        if self.username is None:
+            self.client = pymongo.MongoClient('mongodb://' + self.db_host + ':' + self.db_port)
+        else:
+            self.client = pymongo.MongoClient('mongodb://' + self.username + ':' + self.pwd + '@' + self.db_host + ':' + self.db_port)
         target_db = self.client[self.db_name]
         target_collection = target_db[self.collection_name]
 
         # Initialize index on tweet 'id' field so we throw an error when trying to load duplicates of the same tweet
-        target_collection.create_index([("id", pymongo.ASCENDING)], name='id_index', unique=True)
+        #target_collection.create_index([("id", pymongo.ASCENDING)], name='id_index', unique=True)
         self.connection = target_collection
 
     def load_record(self, record):
-        # Change data types as necessary
-        record['id_str'] = str(record['id_str'])
-        record['timestamp_ms'] = int(record['timestamp_ms'])
         self.connection.insert_one(record)
+
+    def bulk_load_records(self, record_list):
+        self.connection.insert_many(record_list, ordered = False)
 
     def close_connection(self):
         self.client.close()
