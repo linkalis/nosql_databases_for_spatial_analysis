@@ -362,8 +362,10 @@ class MongoDBLoader:
 
     def initialize_connection(self):
         if self.username is None:
+            print("Connecting without a username")
             self.client = pymongo.MongoClient('mongodb://' + self.db_host + ':' + self.db_port)
         else:
+            print("Connecting with username: " + self.username)
             self.client = pymongo.MongoClient('mongodb://' + self.username + ':' + self.pwd + '@' + self.db_host + ':' + self.db_port)
         target_db = self.client[self.db_name]
         target_collection = target_db[self.collection_name]
