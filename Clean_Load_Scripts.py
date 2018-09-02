@@ -608,5 +608,12 @@ class ElasticSearchLoader:
         except Exception as e:
             print(e)
 
+    def bulk_load_records(self, record_list):
+        try:
+            #self.connection.insert_many(record_list, ordered = False)
+        #except pymongo.errors.BulkWriteError as bwe:
+            #fail_log = dumps(bwe.details)
+            #return(fail_log)
+
     def close_connection(self):
         pass
