@@ -609,11 +609,29 @@ class ElasticSearchLoader:
             print(e)
 
     def bulk_load_records(self, record_list):
+        ''' Elasticsearch's bulk API requires each row of data to be interpolated
+        with a separate options list that specifies the index to save the data to,
+        along with a unique id and the mapping type to use when loading the record.
+        So, we'll append a dictionary of options in front of every line of data
+        before loading the whole thing in bulk into the database. '''
+        bulk_data_formatted = []
+        for record in record_list:
+            op_dict = {
+                "index": {
+                    "_index": self.db_name,
+                    "_type": "tweet",
+                    "_id": record['id']
+                }
+            }
+            bulk_data.append(op_dict)
+            bulk_data.append(record)
+
         try:
-            #self.connection.insert_many(record_list, ordered = False)
-        #except pymongo.errors.BulkWriteError as bwe:
-            #fail_log = dumps(bwe.details)
-            #return(fail_log)
+            result = self.client.bulk(index = self.db_name, body = bulk_data_formatted, refresh = True)
+            return(result)
+        except Elasticsearch.ElasticsearchException as es_error:
+            fail_log = dumps(es_error)
+            return(fail_log)
 
     def close_connection(self):
         pass
