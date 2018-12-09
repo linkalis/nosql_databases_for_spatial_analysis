@@ -6,6 +6,7 @@ import json
 from bson import ObjectId
 import pprint
 import time
+import requests
 
 # Libraries for Mongo
 import pymongo
@@ -14,10 +15,11 @@ from bson.json_util import dumps
 
 # Libraries for Neo4j
 from neo4j.v1 import GraphDatabase
-from neo4j.v1 import exceptions
+#from neo4j.v1 import exceptions
 
 # Libraries for ElasticSearch
-from elasticsearch import Elasticsearch
+#from elasticsearch import Elasticsearch
+import elasticsearch
 
 # Geohashing
 # http://www.willmcginnis.com/2016/01/16/pygeohash-1-0-1-fast-gis-geohash-python/
@@ -303,6 +305,7 @@ class Loader:
         self.log_load(load_time, success_count, fail_count, fail_log) # write load results to log
 
     def load_batch_data(self):
+        print("Loader: Loading batch data!")
         begin = time.time()
 
         try:
@@ -343,6 +346,8 @@ class Loader:
         files_to_load_log.write(remaining_files) # write the data back
         files_to_load_log.truncate() # set the file size to the current size
 
+    def close_connection(self):
+        self.db_connection.close_connection()
 
 ### MongoDBLoader
 
@@ -552,12 +557,14 @@ class ElasticSearchLoader:
         self.db_name = db_name
 
     def initialize_connection(self):
-        self.client = Elasticsearch([{'host': self.db_host, 'port': self.db_port}])
+        #self.client = Elasticsearch([{'host': self.db_host, 'port': self.db_port}])
+        self.client = elasticsearch.Elasticsearch([self.db_host], port=self.db_port, timeout=2000)
 
         # Check if we can connect successfully
         if self.client.ping():
             print("Connected to ElasticSearch instance.")
 
+            print("Checking for existence of index called: " + str(self.db_name))
             # If we're successfully connected, then create a new index (aka database) in ElasticSearch to hold the data
             if not self.client.indices.exists(self.db_name):
                 # Define settings for the new index
@@ -620,18 +627,20 @@ class ElasticSearchLoader:
                 "index": {
                     "_index": self.db_name,
                     "_type": "tweet",
-                    "_id": record['id']
+                    "_id": record['id'] # Setting an _id field automatically adds a uniqueness constraint in Elasticsearch
                 }
             }
-            bulk_data.append(op_dict)
-            bulk_data.append(record)
+            bulk_data_formatted.append(op_dict)
+            bulk_data_formatted.append(record)
 
         try:
-            result = self.client.bulk(index = self.db_name, body = bulk_data_formatted, refresh = True)
+            result = self.client.bulk(body = bulk_data_formatted, refresh=True)
+            #result = requests.put("http://" + self.db_host + ":" + self.db_port, data = bulk_data_formatted)
             return(result)
-        except Elasticsearch.ElasticsearchException as es_error:
+        except elasticsearch.ElasticsearchException as es_error:
+            print(es_error)
             fail_log = dumps(es_error)
             return(fail_log)
 
     def close_connection(self):
-        pass
+        pass # the Elasticsearch Python driver doesn't implement a connection close method
