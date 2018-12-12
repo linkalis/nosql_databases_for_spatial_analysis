@@ -31,7 +31,7 @@
 
 **Summary**: Because Neo4j imposes a graph structure on your data, it requires some modeling effort at the outset to define your data in the context of nodes and relationships. It is not schemaless, but it has a much more flexible schema than relational databases.  It offers kind of a "happy medium" between document-based and relational databases.  Also implements a number of graph algorithms (ex: PageRank, shortest path, etc.) that can support niche research applications.
 
-**Transactional vs. Analytic<sup>1</sup>**: Analytic
+**Transactional vs. Analytic**: Analytic
 
 **Recommended use**: Reasearch applications--especially those that can be framed as some kind of network analysis, and that can benefit from the availability of graph algorithms for analysis.
 
@@ -44,7 +44,7 @@
 
 **Summary**: Elasticsearch evolved as a solution to power large-scale archive/retrieve projects.  It is "schemaless", and applies a very robust approach to indexing and retrieval.  It has a strong feature set for natural language searches, with a range of built-in methods tailored specifically to text search (e.g. fuzzy searching, relevance scoring).  Spatial clauses can also be feathered into queries that take advantage Elasticsearch's advanced text search capabilities.
 
-**Transactional vs. Analytic<sup>1</sup>**: Analytic
+**Transactional vs. Analytic**: Analytic
 
 **Recommended use**: Large volumes of time-series, log data, and/or text data that need to be stored and made easily searchable.  Could also be used as a metadata storage solution for multimedia files, raster imagery, etc. that are stored in a separate database.
 
