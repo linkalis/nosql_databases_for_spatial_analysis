@@ -1,11 +1,14 @@
 # Getting Started with NoSQL Databases for Spatial Analysis
 
 
+## Contents
+
 1. [Docker Intro](Docker_Intro.ipynb)
 2. [MongoDB](MongoDB.ipynb)
 3. [Neo4j](Neo4j.ipynb)
 4. [Elasticsearch](Elasticsearch.ipynb)
 
+---
 
 ## NoSQL Database Comparison
 
