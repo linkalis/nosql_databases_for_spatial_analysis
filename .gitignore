@@ -2,5 +2,4 @@
 .DS_Store
 secrets.py
 __pycache__
-Large_Data_load.ipynb
 py3/
