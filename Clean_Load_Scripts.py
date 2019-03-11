@@ -108,30 +108,6 @@ class Cleaner:
         self.logs_path = logs_path
         self.file_name = file_name
 
-    def clean_data(self):
-        ''' Iterates over each data element, progressing through each cleaning step on each element.
-        Because dictionaries are mutable, this function can essentially perform an 'update in place'
-        on the dictionary object representing the record for any values that need to be changed or corrected.
-        Logs the ids of data elements that contain nulls and/or errors to arrays as we go. At the end
-        of cleaning, invokes the log_cleaning() method to record a log of which records needed to have
-        their geodata cleaned. '''
-
-        step1_log = []
-        step2_log = []
-
-        #i = 0
-        for record in self.data_list:
-            #print(i)
-            self.set_data_types(record)
-            self.fix_null_places(record, step1_log)
-            self.fix_bounding_box(record, step2_log)
-            self.get_centroid(record)
-            #i += 1
-
-        print("Cleaner: Finished cleaning records.")
-        self.log_cleaning(step1_log, step2_log)
-        return(self.data_list)
-
     def set_data_types(self, record):
         record['id_str'] = str(record['id_str'])
         record['timestamp_ms'] = int(record['timestamp_ms'])
@@ -233,14 +209,48 @@ class Cleaner:
 
         record['place']['centroid_geohash'] = pgh.encode(centroid_lat, centroid_long, precision=12)
 
+    def set_id(self, record):
+        ''' Set an id that is a concatenation of the tweet's geohash, plus its unique
+        tweet_id value.  This gives us the opportunity to shard or index based on geohash,
+        while also guaranteeting uniqueness. '''
+        record['geo_id'] = str(record['place']['centroid_geohash']) + str(record['id_str'])
+
+    def clean_data(self):
+        ''' Iterates over each data element, progressing through each cleaning step on each element.
+        Because dictionaries are mutable, this function can essentially perform an 'update in place'
+        on the dictionary object representing the record for any values that need to be changed or corrected.
+        Logs the ids of data elements that contain nulls and/or errors to arrays as we go. At the end
+        of cleaning, invokes the log_cleaning() method to record a log of which records needed to have
+        their geodata cleaned. '''
+
+        step1_log = []
+        step2_log = []
+
+        #i = 0
+        for record in self.data_list:
+            #print(i)
+            self.set_data_types(record)
+            self.fix_null_places(record, step1_log)
+            self.fix_bounding_box(record, step2_log)
+            self.get_centroid(record)
+            self.set_id(record)
+            #i += 1
+
+        print("Cleaner: Finished cleaning records.")
+        self.log_cleaning(step1_log, step2_log)
+        return(self.data_list)
+
     def log_cleaning(self, step1_log, step2_log):
         ''' When cleaning is done, put the cleaning log arrays into a dictionary and write the result
         to the cleaning log file. '''
 
         log_dict = dict()
         log_dict['file_name'] = self.file_name
-        log_dict['null_places_fixed'] = step1_log
-        log_dict['bounding_boxes_fixed'] = step2_log
+
+        #log_dict['null_places_fixed'] = step1_log
+        #log_dict['bounding_boxes_fixed'] = step2_log
+        log_dict['null_places_fixed'] = len(step1_log)
+        log_dict['bounding_boxes_fixed'] = len(step2_log)
 
         cleaning_log  = open(self.logs_path + "/cleaning_log.txt", "a+") # open file in append mode
         cleaning_log.write(json.dumps(log_dict))
@@ -332,7 +342,7 @@ class Loader:
         log_dict['load_time'] = load_time
         log_dict['success_count'] = success_count
         log_dict['fail_count'] = fail_count
-        log_dict['fail_log'] = fail_log
+        #log_dict['fail_log'] = fail_log    # The fail log can get long! Only comment this out if you want full details into why certain tweets are failing to load.
         loaded_files_log  = open(self.logs_path + "/loaded_files.txt", "a+") # open file in append mode
         loaded_files_log.write(json.dumps(log_dict))
         loaded_files_log.write("\n")
@@ -377,6 +387,7 @@ class MongoDBLoader:
 
         # Initialize index on tweet 'id' field so we throw an error when trying to load duplicates of the same tweet
         #target_collection.create_index([("id", pymongo.ASCENDING)], name='id_index', unique=True)
+        target_collection.create_index([("geo_id", pymongo.ASCENDING)], name='geo_id_index', unique=True)
         self.connection = target_collection
 
     def load_record(self, record):
